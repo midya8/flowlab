@@ -1,0 +1,63 @@
+import math
+import random
+from .core import Flow,train
+
+
+def fixture(n,seed):
+    r=random.Random(seed);out=[]
+    for _ in range(n):
+        u,v=r.gauss(0,1),r.gauss(0,1)
+        out.append([u,.5*v+.6*(u*u-1)])
+    return out
+
+
+def gaussian_fit(points):
+    n=len(points);mu=[sum(x[j] for x in points)/n for j in range(2)]
+    a=sum((x[0]-mu[0])**2 for x in points)/n
+    b=sum((x[0]-mu[0])*(x[1]-mu[1]) for x in points)/n
+    c=sum((x[1]-mu[1])**2 for x in points)/n
+    return mu,a,b,c
+
+
+def gaussian_log_prob(x,fit):
+    mu,a,b,c=fit;det=a*c-b*b;u,v=x[0]-mu[0],x[1]-mu[1]
+    return -math.log(2*math.pi)-.5*math.log(det)-.5*(c*u*u-2*b*u*v+a*v*v)/det
+
+
+def sample_summary(points):
+    residual=[x[1]-.6*(x[0]*x[0]-1) for x in points]
+    return {'mean_x':sum(x[0] for x in points)/len(points),
+            'mean_y':sum(x[1] for x in points)/len(points),
+            'mean_curve_residual':sum(residual)/len(points),
+            'curve_residual_second_moment':sum(v*v for v in residual)/len(points),
+            'fraction_abs_curve_residual_le_1':sum(abs(v)<=1 for v in residual)/len(points)}
+
+
+def demo():
+    points,test=fixture(1024,53),fixture(512,59)
+    net,history=train(points)
+    initial=Flow();fit=gaussian_fit(points)
+    models={'trained_flow':net.log_prob,'untrained_flow':initial.log_prob,
+            'fitted_gaussian':lambda x:gaussian_log_prob(x,fit),
+            'generating_reference':lambda x:-math.log(2*math.pi)-.5*(x[0]**2+((x[1]-.6*(x[0]**2-1))/.5)**2)-math.log(.5)}
+    nll={name:{'train':-sum(fn(x) for x in points)/len(points),'test':-sum(fn(x) for x in test)/len(test)} for name,fn in models.items()}
+    r=random.Random(19);mu,a,b,c=fit
+    gp=[]
+    for _ in range(256):
+        z,w=r.gauss(0,1),r.gauss(0,1)
+        gp.append([mu[0]+math.sqrt(a)*z,mu[1]+b/math.sqrt(a)*z+math.sqrt(c-b*b/a)*w])
+    samples={'trained_flow':net.sample(),'untrained_flow':initial.sample(),'fitted_gaussian':gp,'reference':fixture(256,61)}
+    errors=[]
+    for x in test:
+        z,ld,_=net.forward(x);back,ild=net.inverse(z)
+        errors.append(max(abs(back[j]-x[j]) for j in range(2)))
+        errors.append(abs(ld+ild))
+    result={'fixture':{'train_seed':53,'test_seed':59,'reference_sample_seed':61,'sample_seed':19,
+                       'network_seed':11,'training_draw_seed':12,'training_count':1024,'test_count':512,
+                       'layers':4,'hidden':12,'parameters':len(net.params),'updates':2000,'batch_size':32,'learning_rate':.003},
+            'nll_nats_per_2d_point':nll,'history':history,'gaussian':{'mean':mu,'covariance':[[a,b],[b,c]]},
+            'max_round_trip_or_logdet_residual':max(errors),
+            'sample_summary':{name:sample_summary(x) for name,x in samples.items()},'samples':samples}
+    assert nll['trained_flow']['test'] < nll['fitted_gaussian']['test']
+    assert max(errors)<1e-10
+    return result
