@@ -10,6 +10,7 @@
 python -m unittest discover -s tests -v
 python -m flowlab demo > /tmp/flow-demo.json
 python examples/render_demo.py /tmp/flow-demo.json --check
+python examples/render_score.py /tmp/flow-demo.json --check
 python -m flowlab train examples/points.json /tmp/model.json --updates 1000
 python -m flowlab score /tmp/model.json examples/points.json
 python -m flowlab gradient /tmp/model.json examples/points.json
@@ -65,7 +66,7 @@ The figure uses one shared gain and a disclosed display-length cap, with raw vec
 
 29 tests include every parameter of tiny one/two/three-layer flows by central finite differences, an independent finite-difference full Jacobian determinant, both inverse directions, constant-affine density, logdet sign, standard-normal identity, midpoint density integration of a small near-identity model, strict serialization, bounds, no mutation and CLI. The quadrature test is a finite-grid sanity check, not a general normalization proof; the bijective change-of-variables construction supplies the model's mathematical normalization.
 
-CI tests Python3.10-3.13, trains the actual fixture and checks the reproduced SVG on3.11. Figures use shared axes and expose outside-plot counts rather than silently dropping outliers.
+CI tests Python3.10-3.13, trains the actual fixture and checks both reproduced SVGs on3.11. Figures use shared axes and expose outside-plot counts rather than silently dropping outliers.
 
 ## Limits
 
