@@ -23,3 +23,4 @@ jobs:
       - run: python examples/render_demo.py /tmp/flow-demo.json --check
       - run: python examples/render_score.py /tmp/flow-demo.json --check
       - run: python examples/render_conditional.py /tmp/flow-demo.json --check
+      - run: python examples/render_windows.py /tmp/flow-demo.json --check
