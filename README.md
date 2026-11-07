@@ -11,9 +11,11 @@ python -m unittest discover -s tests -v
 python -m flowlab demo > /tmp/flow-demo.json
 python examples/render_demo.py /tmp/flow-demo.json --check
 python examples/render_score.py /tmp/flow-demo.json --check
+python examples/render_conditional.py /tmp/flow-demo.json --check
 python -m flowlab train examples/points.json /tmp/model.json --updates 1000
 python -m flowlab score /tmp/model.json examples/points.json
 python -m flowlab gradient /tmp/model.json examples/points.json
+python -m flowlab conditional /tmp/model.json --axis 0 --value 1.5 --low -4 --high 5 --grid-size 257
 python -m flowlab sample /tmp/model.json --count 128 --seed 19
 ```
 
@@ -62,11 +64,31 @@ For `log p_X = log p_Z(f(x)) + L(x)`, the score is `J_f(x)^T (-f(x)) + grad L(x)
 
 The figure uses one shared gain and a disclosed display-length cap, with raw vectors and per-panel capped counts. It does not simulate ascent paths or generate samples. Gradients depend on coordinate units; they are not probabilities, feature importances, causal effects, likelihood ratios or an out-of-distribution detector. Direction points toward local increase, not necessarily a global mode or the data manifold. Closed-form constant-affine and variable-scale cases independently check the volume contribution; both coordinates/components are finite-differenced through 1/2/3/8-layer networks.
 
+## Conditional slices: a grid is not an exact conditional
+
+![Finite-interval conditional density slices](assets/conditional-audit.svg)
+
+`conditional_slice(flow, fixed_axis, fixed_value, low, high, grid_size)` and the `conditional` CLI evaluate the joint log density along one free coordinate. Log-max subtraction avoids underflow from a large shared log-density offset. The trapezoid rule normalizes a **piecewise-linear density on the supplied finite interval**; moments integrate that interpolation analytically, CDF integrates each segment, and quantiles invert it by bounded bisection. JSON retains every grid point, original joint log density, normalized density, CDF, requested quantiles, moments and actual model-call count. Both fixed-axis choices work. No unreported adaptive search.
+
+The same trained model, observed x=-1.5/0/1.5, free y interval[-4,5] and grids65/257/513 use **2,505 model evaluations** in total. On the finest grid:
+
+| Fixed x | Flow median | Flow variance | Flow 5%-95% quantiles | Median change257 to513 |
+| ---: | ---: | ---: | --- | ---: |
+| -1.5 | 0.726272 | 0.256504 | [-0.080939,1.582895] | 0.00000649 |
+| 0 | -0.632395 | 0.277220 | [-1.507665,0.223181] | 0.00000070 |
+| 1.5 | 0.722021 | 0.334000 | [-0.117114,1.771246] | 0.00001986 |
+
+The known generator's full-line conditional means are0.75/-0.6/0.75, each with variance0.25. The train-fitted Gaussian's full-line conditional means are0.005363/0.019952/0.034542, with variance0.924248. Reference curves are clearly labeled full-line formulas; the flow curves are interval-renormalized approximations. These descriptive development slices do not establish calibrated coverage or model quality elsewhere. Original training and earlier audit outputs are unchanged.
+
+Grid refinement checks only sensitivity to these grid sizes **inside the same interval**. It cannot measure missing tail mass or guarantee accuracy; two grids can miss the same narrow peak. The returned log slice integral is an approximate integral of joint density over this interval, with density units for the fixed coordinate. It is not an event probability, exact marginal likelihood or tail probability. A continuous exact-coordinate condition has probability zero; the density slice defines the conditional approximation. Narrower intervals change the distribution, not just its displayed crop.
+
+All bounds are validated before model evaluation: fixed axis0/1, fixed value[-100,100], interval endpoints[-100,100] with width>=1e-6, grid2-513, and1-33 requested quantiles in[0,1]. Nonfinite joint scores fail. Default quantiles are.05/.5/.95, with endpoints and duplicate/unsorted requests supported. Uniform and linear-density formulas, normal/affine references, explicit truncation, refinement, log offsets+/-10000, monotone CDF/normalization, no mutation, preflight call budgets and CLI errors are tested.
+
 ## Audits
 
-29 tests include every parameter of tiny one/two/three-layer flows by central finite differences, an independent finite-difference full Jacobian determinant, both inverse directions, constant-affine density, logdet sign, standard-normal identity, midpoint density integration of a small near-identity model, strict serialization, bounds, no mutation and CLI. The quadrature test is a finite-grid sanity check, not a general normalization proof; the bijective change-of-variables construction supplies the model's mathematical normalization.
+38 tests include every parameter of tiny one/two/three-layer flows by central finite differences, an independent finite-difference full Jacobian determinant, both inverse directions, constant-affine density, logdet sign, standard-normal identity, midpoint density integration of a small near-identity model, strict serialization, bounds, no mutation and CLI. The quadrature test is a finite-grid sanity check, not a general normalization proof; the bijective change-of-variables construction supplies the model's mathematical normalization.
 
-CI tests Python3.10-3.13, trains the actual fixture and checks both reproduced SVGs on3.11. Figures use shared axes and expose outside-plot counts rather than silently dropping outliers.
+CI tests Python3.10-3.13, trains the actual fixture and checks all three reproduced SVGs on3.11. Figures use shared axes and expose outside-plot counts rather than silently dropping outliers.
 
 ## Limits
 
