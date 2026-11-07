@@ -21,3 +21,4 @@ jobs:
           python-version: '3.11'
       - run: python -m flowlab demo > /tmp/flow-demo.json
       - run: python examples/render_demo.py /tmp/flow-demo.json --check
+      - run: python examples/render_score.py /tmp/flow-demo.json --check
