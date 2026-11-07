@@ -58,6 +58,26 @@ def demo():
             'nll_nats_per_2d_point':nll,'history':history,'gaussian':{'mean':mu,'covariance':[[a,b],[b,c]]},
             'max_round_trip_or_logdet_residual':max(errors),
             'sample_summary':{name:sample_summary(x) for name,x in samples.items()},'samples':samples}
+    result['input_score_audit']=score_audit(net)
     assert nll['trained_flow']['test'] < nll['fitted_gaussian']['test']
     assert max(errors)<1e-10
     return result
+
+
+def score_audit(net):
+    # Fixed grid, selected before computing score errors. No optimization here.
+    rows=[];errors=[];omission=[]
+    for i in range(9):
+        for j in range(9):
+            x=[-2.+i*.5,-1.+j*.5];r=net.input_score(x);fd=[]
+            for k in range(2):
+                plus,minus=list(x),list(x);plus[k]+=1e-5;minus[k]-=1e-5
+                fd.append((net.log_prob(plus)-net.log_prob(minus))/2e-5)
+            rows.append({'point':x,**r,'central_difference':fd})
+            errors.extend(abs(a-b) for a,b in zip(r['score'],fd))
+            omission.extend(abs(a-b) for a,b in zip(r['base_pullback'],fd))
+    assert max(errors)<1e-6
+    assert max(omission)>.1
+    return {'grid':'9x9, x=-2..2, y=-1..3, spacing .5; epsilon 1e-5',
+            'max_abs_coordinate_error':max(errors),
+            'max_abs_error_omitting_logdet_gradient':max(omission),'rows':rows}
