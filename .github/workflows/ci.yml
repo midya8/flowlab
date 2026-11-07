@@ -22,3 +22,4 @@ jobs:
       - run: python -m flowlab demo > /tmp/flow-demo.json
       - run: python examples/render_demo.py /tmp/flow-demo.json --check
       - run: python examples/render_score.py /tmp/flow-demo.json --check
+      - run: python examples/render_conditional.py /tmp/flow-demo.json --check
