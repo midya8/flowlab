@@ -12,6 +12,7 @@ python -m flowlab demo > /tmp/flow-demo.json
 python examples/render_demo.py /tmp/flow-demo.json --check
 python -m flowlab train examples/points.json /tmp/model.json --updates 1000
 python -m flowlab score /tmp/model.json examples/points.json
+python -m flowlab gradient /tmp/model.json examples/points.json
 python -m flowlab sample /tmp/model.json --count 128 --seed 19
 ```
 
@@ -50,9 +51,19 @@ All 256-sample arms use sample seed19 except the fresh generator reference (seed
 
 Across 512 test points, the maximum forward/inverse reconstruction or opposing-logdet residual is **1.7763568394002505e-15** on the development run. That is an implementation audit on those inputs, not a global error bound. The trained model remains worse than the known generating density on this test set; likelihood fidelity and sample fidelity are different checks.
 
+## Input score, with the missing-term trap exposed
+
+![Input score decomposition on a fixed grid](assets/score-audit.svg)
+
+`Flow.input_score(point)` returns the analytic input gradient of **fitted log density**, its base-density pullback and log-Jacobian gradient separately. Weights stay fixed. The `gradient` CLI returns all three vectors plus log density, for 1-256 input rows. This is separate from `score`, the existing log-density command.
+
+For `log p_X = log p_Z(f(x)) + L(x)`, the score is `J_f(x)^T (-f(x)) + grad L(x)`. Merely pulling back the normal score drops a real term when scales depend on input. The same trained fixture on a fixed 9x9 grid, x=-2..2 and y=-1..3, has maximum coordinate discrepancy **1.19e-9** against central differences (epsilon1e-5). Dropping the logdet gradient gives **0.660545** maximum coordinate discrepancy. Both gates run in the demo. These are implementation checks, not a global derivative error bound or an ablation of learning quality.
+
+The figure uses one shared gain and a disclosed display-length cap, with raw vectors and per-panel capped counts. It does not simulate ascent paths or generate samples. Gradients depend on coordinate units; they are not probabilities, feature importances, causal effects, likelihood ratios or an out-of-distribution detector. Direction points toward local increase, not necessarily a global mode or the data manifold. Closed-form constant-affine and variable-scale cases independently check the volume contribution; both coordinates/components are finite-differenced through 1/2/3/8-layer networks.
+
 ## Audits
 
-22 tests include every parameter of tiny one/two/three-layer flows by central finite differences, an independent finite-difference full Jacobian determinant, both inverse directions, constant-affine density, logdet sign, standard-normal identity, midpoint density integration of a small near-identity model, strict serialization, bounds, no mutation and CLI. The quadrature test is a finite-grid sanity check, not a general normalization proof; the bijective change-of-variables construction supplies the model's mathematical normalization.
+29 tests include every parameter of tiny one/two/three-layer flows by central finite differences, an independent finite-difference full Jacobian determinant, both inverse directions, constant-affine density, logdet sign, standard-normal identity, midpoint density integration of a small near-identity model, strict serialization, bounds, no mutation and CLI. The quadrature test is a finite-grid sanity check, not a general normalization proof; the bijective change-of-variables construction supplies the model's mathematical normalization.
 
 CI tests Python3.10-3.13, trains the actual fixture and checks the reproduced SVG on3.11. Figures use shared axes and expose outside-plot counts rather than silently dropping outliers.
 
