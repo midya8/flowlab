@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flowlab-audit"
+version = "0.1.0"
+description = "Explicit 2-D affine coupling with exact model density and gradient audits"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+flowlab = "flowlab.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["flowlab*"]
