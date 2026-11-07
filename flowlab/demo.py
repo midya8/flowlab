@@ -60,6 +60,7 @@ def demo():
             'sample_summary':{name:sample_summary(x) for name,x in samples.items()},'samples':samples}
     result['input_score_audit']=score_audit(net)
     result['conditional_audit']=conditional_audit(net,fit)
+    result['window_audit']=window_demo(net)
     assert nll['trained_flow']['test'] < nll['fitted_gaussian']['test']
     assert max(errors)<1e-10
     return result
@@ -98,3 +99,25 @@ def conditional_audit(net,fit):
     return {'interval':[-4.,5.],'grid_sizes':[65,257,513],'total_model_evaluations':3*(65+257+513),
             'reference_note':'known generator and fitted Gaussian formulas describe full real-line conditionals; grid flow is truncated',
             'rows':rows}
+
+
+def window_demo(net):
+    from .conditional import window_audit
+    rows=[window_audit(net,0,x) for x in [-1.5,0.,1.5]]
+    assert all(.5<r['interpolated_inner_mass_within_outer']<.9 for r in rows)
+    # An analytic non-neural adversarial integrand, not another learned model.
+    class HiddenPeak:
+        def log_prob(self,x):
+            sd=.0001
+            peak=.5*math.exp(-.5*((x[1]-.015625)/sd)**2)/(sd*math.sqrt(2*math.pi))
+            return math.log(.0001+peak)
+    from .conditional import conditional_slice
+    missed=[conditional_slice(HiddenPeak(),0,0.,0.,1.,n) for n in [17,33]]
+    reference_mass=.0001+.5*.5*(math.erf((1-.015625)/(.0001*math.sqrt(2)))-math.erf(-.015625/(.0001*math.sqrt(2))))
+    assert all(abs(math.exp(s['log_slice_integral_approx'])-.0001)<1e-12 for s in missed)
+    assert reference_mass>.5
+    return {'rows':rows,'total_model_evaluations':sum(r['model_evaluations'] for r in rows),
+            'missed_peak':{'non_neural_density':'.0001 + .5*NormalPDF(y; mean=.015625, sd=.0001), y in[0,1]',
+                           'slices':missed,'reference_interval_integral':reference_mass,
+                           'counterexample_evaluations':50},
+            'limits':'finite outer interval only; mass ratios describe interpolation, not true whole-line probabilities'}
