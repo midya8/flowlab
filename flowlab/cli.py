@@ -2,6 +2,7 @@ import argparse
 import json
 from .core import train,load,artifact,point
 from .demo import demo
+from .conditional import conditional_slice
 
 
 def read(p):
@@ -15,6 +16,8 @@ def main():
     q=sub.add_parser('score');q.add_argument('model');q.add_argument('input')
     q=sub.add_parser('gradient');q.add_argument('model');q.add_argument('input')
     q=sub.add_parser('sample');q.add_argument('model');q.add_argument('--count',type=int,default=256);q.add_argument('--seed',type=int,default=19)
+    q=sub.add_parser('conditional');q.add_argument('model');q.add_argument('--axis',type=int,required=True);q.add_argument('--value',type=float,required=True)
+    q.add_argument('--low',type=float,default=-4.);q.add_argument('--high',type=float,default=5.);q.add_argument('--grid-size',type=int,default=257)
     a=p.parse_args()
     try:
         if a.command=='demo':r=demo()
@@ -22,6 +25,7 @@ def main():
             n,h=train(read(a.input),updates=a.updates)
             with open(a.output,'w',encoding='utf-8') as f:json.dump(artifact(n),f,allow_nan=False)
             r={'output':a.output,'history':h}
+        elif a.command=='conditional':r=conditional_slice(load(read(a.model)),a.axis,a.value,a.low,a.high,a.grid_size)
         elif a.command=='sample':r={'points':load(read(a.model)).sample(a.count,a.seed)}
         else:
             data=read(a.input)
