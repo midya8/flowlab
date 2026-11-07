@@ -516,7 +516,7 @@
 <path d="M914.000,108.000 l6.694,3.671" stroke="#387667" fill="none" stroke-width="1.2" marker-end="url(#arrow)"/>
 <text x="674" y="373" font-size="12">Max raw norm: 18.627; capped: 25/81</text>
 <text x="674" y="393" font-size="12">x: -2 to 2; y: -1 to 3. Shared axes/gain.</text>
-<text x="24" y="424" font-size="13">Central difference, epsilon 1e-5: max coordinate error 1.19e-09; omitting volume: 0.6605.</text>
+<text x="24" y="424" font-size="13">Central difference, epsilon 1e-5: max coordinate error &lt;1e-6 (demo gate); omitting volume: 0.6605.</text>
 <text x="24" y="448" font-size="13">Arrows = 0.03 times vector, length capped at 0.32 input units for display. Raw vectors are in demo JSON.</text>
 <text x="24" y="472" font-size="13">Fixed-grid implementation audit, not a global bound, causal explanation, OOD detector or sampling method.</text>
 </g></svg>
