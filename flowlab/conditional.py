@@ -24,6 +24,12 @@ def conditional_slice(net,fixed_axis,fixed_value,low=-4.,high=5.,grid_size=257,q
     for x in xs:
         point=[0.,0.];point[axis]=fixed;point[1-axis]=x
         logs.append(number(net.log_prob(point),'slice log density'))
+    return {'fixed_axis':axis,'fixed_value':fixed,'free_axis':1-axis,
+            'model_evaluations':n,**_summarize(xs,logs,q)}
+
+
+def _summarize(xs,logs,q):
+    lo,hi,n=xs[0],xs[-1],len(xs)
     shift=max(logs);ys=[math.exp(v-shift) for v in logs]
     areas=[(xs[i+1]-xs[i])*(ys[i]+ys[i+1])/2 for i in range(n-1)]
     z=math.fsum(areas)
@@ -53,8 +59,31 @@ def conditional_slice(net,fixed_axis,fixed_value,low=-4.,high=5.,grid_size=257,q
         values.append({'probability':probability,'value':value})
     normalizer=shift+math.log(z)
     if not all(math.isfinite(v) for v in [normalizer,mean,variance]+density):raise ValueError('nonfinite conditional result')
-    return {'fixed_axis':axis,'fixed_value':fixed,'free_axis':1-axis,'interval':[lo,hi],
-            'grid_size':n,'model_evaluations':n,'grid':xs,'joint_log_density':logs,
+    return {'interval':[lo,hi],'grid_size':n,'grid':xs,'joint_log_density':logs,
             'conditional_density':density,'cdf':cdf,'quantiles':values,'mean':mean,'variance':variance,
             'log_slice_integral_approx':normalizer,
             'semantics':'piecewise-linear sampled joint density, renormalized on finite interval; tails unknown'}
+
+
+def window_audit(net,fixed_axis,fixed_value,low=-4.,high=4.,grid_size=513,inner_start=192,inner_end=320):
+    """Compare a grid-aligned inner interval against a finite outer interval.
+
+    Only the outer grid is evaluated. The inner density is re-normalized from
+    the identical sampled heights. This diagnoses window sensitivity of the
+    interpolant, not missing peaks, whole-line mass or approximation accuracy.
+    """
+    n=integer(grid_size,2,513,'grid_size')
+    start=integer(inner_start,0,n-2,'inner_start');end=integer(inner_end,start+1,n-1,'inner_end')
+    outer=conditional_slice(net,fixed_axis,fixed_value,low,high,n)
+    inner=_summarize(outer['grid'][start:end+1],outer['joint_log_density'][start:end+1],[.05,.5,.95])
+    # Compute ratio directly in the outer log scale, avoiding subtraction of
+    # large shared log offsets in the two reported log integrals.
+    logs=outer['joint_log_density'];shift=max(logs);heights=[math.exp(v-shift) for v in logs]
+    areas=[(outer['grid'][i+1]-outer['grid'][i])*(heights[i]+heights[i+1])/2 for i in range(n-1)]
+    ratio=math.fsum(areas[start:end])/math.fsum(areas)
+    return {'fixed_axis':outer['fixed_axis'],'fixed_value':outer['fixed_value'],
+            'free_axis':outer['free_axis'],'model_evaluations':n,'inner_grid_indices':[start,end],
+            'outer':outer,'inner':inner,'interpolated_inner_mass_within_outer':ratio,
+            'interpolated_removed_fraction_within_outer':1-ratio,
+            'median_shift_inner_minus_outer':inner['quantiles'][1]['value']-outer['quantiles'][1]['value'],
+            'semantics':'mass fractions of the sampled piecewise-linear density within the finite outer interval; whole-line tails and missed peaks unknown'}
