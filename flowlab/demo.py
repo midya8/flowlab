@@ -59,6 +59,7 @@ def demo():
             'max_round_trip_or_logdet_residual':max(errors),
             'sample_summary':{name:sample_summary(x) for name,x in samples.items()},'samples':samples}
     result['input_score_audit']=score_audit(net)
+    result['conditional_audit']=conditional_audit(net,fit)
     assert nll['trained_flow']['test'] < nll['fitted_gaussian']['test']
     assert max(errors)<1e-10
     return result
@@ -81,3 +82,19 @@ def score_audit(net):
     return {'grid':'9x9, x=-2..2, y=-1..3, spacing .5; epsilon 1e-5',
             'max_abs_coordinate_error':max(errors),
             'max_abs_error_omitting_logdet_gradient':max(omission),'rows':rows}
+
+
+def conditional_audit(net,fit):
+    from .conditional import conditional_slice
+    rows=[];mu,a,b,c=fit
+    for fixed in [-1.5,0.,1.5]:
+        slices=[conditional_slice(net,0,fixed,-4.,5.,n) for n in [65,257,513]]
+        rows.append({'fixed_x':fixed,'slices':slices,
+                     'generating_mean':.6*(fixed*fixed-1),'generating_sd':.5,
+                     'gaussian_conditional_mean':mu[1]+b/a*(fixed-mu[0]),
+                     'gaussian_conditional_sd':math.sqrt(c-b*b/a),
+                     'median_change_257_to_513':abs(slices[1]['quantiles'][1]['value']-slices[2]['quantiles'][1]['value'])})
+    assert max(row['median_change_257_to_513'] for row in rows)<.002
+    return {'interval':[-4.,5.],'grid_sizes':[65,257,513],'total_model_evaluations':3*(65+257+513),
+            'reference_note':'known generator and fitted Gaussian formulas describe full real-line conditionals; grid flow is truncated',
+            'rows':rows}
