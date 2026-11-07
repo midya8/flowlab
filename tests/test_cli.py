@@ -23,3 +23,17 @@ class CLITests(unittest.TestCase):
             json.dump({},f);f.flush()
             p=subprocess.run([sys.executable,'-m','flowlab','sample',f.name],capture_output=True,text=True)
             self.assertEqual(p.returncode,2);self.assertNotIn('Traceback',p.stderr)
+
+    def test_gradient_outputs_and_row_limit(self):
+        from flowlab.core import Flow,artifact
+        with tempfile.TemporaryDirectory() as d:
+            model,data=os.path.join(d,'model.json'),os.path.join(d,'points.json')
+            with open(model,'w') as f:json.dump(artifact(Flow()),f)
+            for rows,code in [([[.2,.4]],0),([[0.,0.]]*256,0),([[0.,0.]]*257,2),([],2)]:
+                with open(data,'w') as f:json.dump(rows,f)
+                p=subprocess.run([sys.executable,'-m','flowlab','gradient',model,data],capture_output=True,text=True)
+                self.assertEqual(p.returncode,code,p.stderr)
+                if code==0:
+                    result=json.loads(p.stdout)['rows'];self.assertEqual(len(result),len(rows))
+                    self.assertEqual(result[0],Flow().input_score(rows[0]))
+                else:self.assertNotIn('Traceback',p.stderr)
