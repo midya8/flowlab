@@ -86,6 +86,27 @@ class Flow:
         if not math.isfinite(loss) or not all(math.isfinite(v) for v in g):raise ValueError('nonfinite loss/gradient')
         return loss,g
 
+    def input_score(self,x):
+        """Gradient of fitted log density, split into base and volume terms.
+
+        Not a probability, likelihood ratio, causal attribution or OOD score.
+        Derivatives are in the supplied coordinate system with weights fixed.
+        """
+        z,ld,cache=self.forward(x);h=self.hidden;p=self.params;size=4*h+2
+        value=-math.log(2*math.pi)-sum(v*v for v in z)/2+ld
+        base=[-v for v in z];volume=[0.,0.]
+        for layer in range(self.layers-1,-1,-1):
+            a,b,xa,xb,act,unit,s=cache[layer];offset=layer*size;exp_s=math.exp(s)
+            for dx,local_ld in [(base,0.),(volume,1.)]:
+                ds=dx[b]*xb*exp_s+local_ld;dt=dx[b]
+                dr=ds*self.scale_bound*(1-unit*unit)
+                da=sum((dr*p[offset+2*h+j]+dt*p[offset+3*h+1+j])*
+                       (1-act[j]*act[j])*p[offset+j] for j in range(h))
+                dx[a]+=da;dx[b]*=exp_s
+        score=[a+b for a,b in zip(base,volume)]
+        if not all(math.isfinite(v) for v in [value]+base+volume+score):raise ValueError('nonfinite input score')
+        return {'log_density':value,'score':score,'base_pullback':base,'logdet_gradient':volume}
+
     def sample(self,count=256,seed=19):
         integer(count,1,2048,'count');integer(seed,0,2**32-1,'seed')
         r=random.Random(seed)
