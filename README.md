@@ -12,10 +12,12 @@ python -m flowlab demo > /tmp/flow-demo.json
 python examples/render_demo.py /tmp/flow-demo.json --check
 python examples/render_score.py /tmp/flow-demo.json --check
 python examples/render_conditional.py /tmp/flow-demo.json --check
+python examples/render_windows.py /tmp/flow-demo.json --check
 python -m flowlab train examples/points.json /tmp/model.json --updates 1000
 python -m flowlab score /tmp/model.json examples/points.json
 python -m flowlab gradient /tmp/model.json examples/points.json
 python -m flowlab conditional /tmp/model.json --axis 0 --value 1.5 --low -4 --high 5 --grid-size 257
+python -m flowlab windows /tmp/model.json --axis 0 --value 1.5 --low -4 --high 4 --grid-size 513 --inner-start 192 --inner-end 320
 python -m flowlab sample /tmp/model.json --count 128 --seed 19
 ```
 
@@ -84,11 +86,31 @@ Grid refinement checks only sensitivity to these grid sizes **inside the same in
 
 All bounds are validated before model evaluation: fixed axis0/1, fixed value[-100,100], interval endpoints[-100,100] with width>=1e-6, grid2-513, and1-33 requested quantiles in[0,1]. Nonfinite joint scores fail. Default quantiles are.05/.5/.95, with endpoints and duplicate/unsorted requests supported. Uniform and linear-density formulas, normal/affine references, explicit truncation, refinement, log offsets+/-10000, monotone CDF/normalization, no mutation, preflight call budgets and CLI errors are tested.
 
+## Window sensitivity and a grid-agreement counterexample
+
+![Aligned finite-window conditional audit](assets/window-audit.svg)
+
+`window_audit` and the `windows` CLI evaluate one outer grid, then reuse a contiguous, index-aligned subgrid for an inner window. They return both full interpolated distributions, the inner/outer segment-area ratio, the removed fraction **within the finite outer window**, and inner-minus-outer median shift. No second round of model evaluations and no adaptive choice of bounds. Shared sampled heights make these mass ratios internally consistent for this interpolant; they do not make the interpolant accurate.
+
+Same trained flow, outer[-4,4],513 points; inner indices192..320 give[-1,1],129 points. Each row costs513 model evaluations, **1,539 total**, not513+129 per row:
+
+| Fixed x | Removed interpolated fraction within outer | Inner-minus-outer median | Inner median | Inner variance |
+| ---: | ---: | ---: | ---: | ---: |
+| -1.5 | 0.297166 | -0.191406 | 0.534865 | 0.119903 |
+| 0 | 0.243537 | +0.161078 | -0.471317 | 0.144531 |
+| 1.5 | 0.319448 | -0.226502 | 0.495517 | 0.127310 |
+
+This measures how renormalizing on a narrower window changes the fitted conditional approximation. The removed fractions are **not whole-line tail probabilities**. They exclude everything outside[-4,4] and may miss structure between grid points. The inner curve is not a cropped version of the outer density: it has a new normalizer and new quantiles. Bounds and indices remain user-selected, never optimized to make results look stable.
+
+The demo also supplies a non-neural adversarial integrand, `.0001 + .5*NormalPDF(y; mean=.015625, sd=.0001)` on[0,1]. Both17- and33-point grids miss the same narrow peak and report integral0.0001, while the analytic normal-CDF reference gives0.5001. Both grids' interpolated means are0.5 despite the actual mean being near0.01572. These50 callback evaluations are separate from the1,539 trained-model calls. The constant component is a density floor **in this artificial integrand only**, not a clipping rule for flow inference. This demonstrates why grid agreement cannot certify conditional accuracy; it is not evidence that this trained model has the same missed peak.
+
+Tests verify aligned reuse/counts, constant-density offset invariance, exact full-window identity, nested mass monotonicity, the normal erf reference, zero-call index rejection, CLI limits and the missed-peak counterexample. Original training, density, score and conditional-grid outputs remain unchanged. Fixed finite windows cannot establish calibrated coverage, full-line normalization or safe automatic bounds.
+
 ## Audits
 
-38 tests include every parameter of tiny one/two/three-layer flows by central finite differences, an independent finite-difference full Jacobian determinant, both inverse directions, constant-affine density, logdet sign, standard-normal identity, midpoint density integration of a small near-identity model, strict serialization, bounds, no mutation and CLI. The quadrature test is a finite-grid sanity check, not a general normalization proof; the bijective change-of-variables construction supplies the model's mathematical normalization.
+45 tests include every parameter of tiny one/two/three-layer flows by central finite differences, an independent finite-difference full Jacobian determinant, both inverse directions, constant-affine density, logdet sign, standard-normal identity, midpoint density integration of a small near-identity model, strict serialization, bounds, no mutation and CLI. The quadrature test is a finite-grid sanity check, not a general normalization proof; the bijective change-of-variables construction supplies the model's mathematical normalization.
 
-CI tests Python3.10-3.13, trains the actual fixture and checks all three reproduced SVGs on3.11. Figures use shared axes and expose outside-plot counts rather than silently dropping outliers.
+CI tests Python3.10-3.13, trains the actual fixture and checks all four reproduced SVGs on3.11. Figures use shared axes and expose outside-plot counts rather than silently dropping outliers.
 
 ## Limits
 
