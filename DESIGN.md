@@ -1,4 +1,4 @@
-# Direction, gradients and bounds
+# FlowLab numerical method
 
 ## Data-to-latent convention
 
